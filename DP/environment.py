@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from enum import Enum
-
+import numpy as np
 
 # 状態クラス
 class State():
@@ -60,21 +60,21 @@ class Environment():
         
     @property
     def actions(self):
-        return [Action.UP, Action.DOWN, ACTION.LEFT, Action.RIGHT]
+        return [Action.UP, Action.DOWN, Action.LEFT, Action.RIGHT]
         
     @property
     def states(self):
-        states =[]
+        states = []
         for row in range(self.row_length):
             for column in range(self.column_length):
                 # Block cells are not included to the state
                 if self.grid[row][column] != 9:
-                    # Create State instance for each cell
+                    # Create state for each cell
                     states.append(State(row, column))
         return states
         
     def transit_func(self, state, action):
-        tansition_probs = {}
+        transition_probs = {}
         if not self.can_action_at(state):
             # Already on the terminal cell.
             return transition_probs
@@ -107,6 +107,71 @@ class Environment():
             raise Exception("Can't move from here!")
             
         next_state = state.clone()
-
-if __name__ == '__main__':
-    
+        
+        # Execute an action (move).
+        if action == Action.UP:
+            next_state.row -= 1
+        elif action == Action.DOWN:
+            next_state.row += 1
+        elif action == Action.LEFT:
+            next_state.column -= 1
+        elif action == Action.RIGHT:
+            next_state.column += 1
+            
+        # Check whether a state is out of the grid
+        if not (0 <= next_state.row < self.row_length):
+            next_state = state
+        if not (0 <= next_state.column < self.column_length):
+            next_state = state
+            
+        # Check whether the agent bumped a block cell
+        if self.grid[next_state.row][next_state.column] == 9:
+            next_state = state
+            
+        return next_state
+        
+    # 報酬関数
+    def reward_func(self, state):
+        reward = self.default_reward
+        done = False
+        
+        # Check an attribute of next state.
+        attribute = self.grid[state.row][state.column]
+        if attribute == 1:
+            # Get reward! and the game ends.
+            reward = 1
+            done = True
+        elif attribute == -1:
+            # Go damage! and the game ends.
+            reward = -1
+            done = True
+            
+        return reward, done
+        
+    # 環境を外部から扱うための関数
+    def reset(self):
+        # Locate the agent at lower left corner.
+        self.agent_state = State(self.row_length -1, 0)
+        return self.agent_state
+        
+    def step(self, action):
+        next_state, reward, done = self.transit(self.agent_state, action)
+        if next_state is not None:
+            self.agent_state = next_state
+            
+        return next_state, reward, done
+        
+    def transit(self, state, action):
+        transition_probs = self.transit_func(state, action)
+        if len(transition_probs) == 0:
+            return None, None, True
+        
+        next_states = []
+        probs = []
+        for s in transition_probs:
+            next_states.append(s)
+            probs.append(transition_probs[s])
+            
+        next_state = np.random.choice(next_states, p=probs)
+        reward, done = self.reward_func(next_state)
+        return next_state, reward, done
